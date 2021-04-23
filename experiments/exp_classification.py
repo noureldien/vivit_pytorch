@@ -1,0 +1,128 @@
+# !/usr/bin/env python
+# -*- coding: UTF-8 -*-
+
+########################################################################
+# GNU General Public License v3.0
+# GNU GPLv3
+# Copyright (c) 2019, Noureldien Hussein
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+########################################################################
+
+"""
+Experiments on contrastive learning form videos.
+"""
+
+import datetime
+import yaml
+import cv2
+import numpy as np
+
+from core import utils, plot_utils, consts, data_utils, pytorch_utils, pytorch_learners
+from core.utils import TextLogger, Path as Pth
+from datasets import data_loaders
+from modules.vivit import ViViT
+import modules
+
+class Classification():
+
+    def __init__(self):
+        super().__init__()
+        self.model_root_path = None
+        self.input_shape = None
+        self.logger = None
+        self.is_training_required = None
+
+        # init some required variables
+        self.model_root_path = ''
+
+    def train(self, ):
+        """
+        Train model on downstream task.
+        config: the configuration object with all the parameters to train the model.
+        best_pretext_epoch: optional arg for init the model.
+        """
+
+        model_name = ''
+        model_root_path = Pth('models',)
+        gpu_ids = [0]
+        n_epochs = 100
+        n_frames = 16
+        batch_size_tr = 32
+        batch_size_te = 32
+        input_shape = (n_frames, 3, 224, 224)
+
+        # building data
+        loader_tr, loader_te, n_tr, n_te = data_loaders.DataLoader3D(n_frames).initialize()
+
+        # building the model
+        model = ViViT(n_frames, is_train=True)
+        pytorch_utils.model_summary(model, input_size=input_shape, batch_size=-1, device='cpu')
+        model = pytorch_utils.parallelize_model(model, gpu_ids)
+        model = model.cuda()
+
+        # callbacks
+        callbacks = []
+        callbacks.append(pytorch_utils.ModelSaveCallback(model, model_root_path))
+
+        # train
+        learner = pytorch_learners.ClassifierLearner( model, model._optimizer, model._loss_fn, model._metric_fn, callbacks)
+        learner.train(loader_tr, loader_te, n_tr, n_te, n_epochs, batch_size_tr, batch_size_te)
+
+        print('--- finish time')
+        print(datetime.datetime.now())
+
+    def eval(self, ):
+        """
+        Test model on downstream task.
+        """
+
+        raise NotImplementedError()
+
+        batch_size_te = config.TEST.BATCH_SIZE
+        epoch_num = config.TRAIN.N_EPOCHS
+        model_name = config.MODEL.NAME
+
+        dataset_name = consts.DATASET_TYPES.ucf101
+        img_dim_crop = config.INPUT.IMAGE_DIM_CROP
+        base_model_path = ''
+        n_segments = 2
+
+        n_fps = config.INPUT.N_FPS
+        input_shape = (n_segments, 3, n_fps, img_dim_crop, img_dim_crop)
+        model_path = Pth('%s/models/%s/%03d.pt', (dataset_name, model_name, epoch_num))
+        logger = utils.TextLogger(logging_type=consts.LOGGING_TYPES.console)
+
+        logger.print('--- start time')
+        logger.print(datetime.datetime.now())
+        logger.print(model_name)
+
+        # building data
+        _, loader_te, n_tr, n_te = data_loaders.DataLoader3D(config, logger).initialize()
+
+        # building the model
+        model = DownstreamModel(config, logger, base_model_path, n_tr)
+        pytorch_utils.load_model_dict(model, model_path, strict=True, resolve_multi_gpu=True)
+        pytorch_utils.freeze_model(model)
+        pytorch_utils.model_summary(model, input_size=input_shape, batch_size=-1, device='cpu', logger=logger)
+        model = pytorch_utils.parallelize_model(model, config.GPU_IDS)
+        model = model.cuda()
+
+        # test
+        learner = pytorch_learners.ClassifierLearner(config, model, model._optimizer, model._scheduler, model._loss_fn, model._metric_fn, logger)
+        learner.test(loader_te, n_te, batch_size_te)
+
+        logger.print('--- finish time')
+        logger.print(datetime.datetime.now())
+
