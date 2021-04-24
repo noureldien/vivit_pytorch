@@ -25,10 +25,10 @@ For training the model.
 """
 
 from core import utils
-from experiments import exp_classification
+from experiments import exp_ss2
 
 def train():
-    exp = exp_classification.Classification()
+    exp = exp_ss2.Classification()
     exp.train()
 
 if __name__ == '__main__':

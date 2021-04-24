@@ -33,12 +33,12 @@ import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
-from torch.utils.data.sampler import SubsetRandomSampler
 from torchvision import transforms
 from torchvision import datasets
 
 from core import utils, image_utils, config_utils, pytorch_utils, consts
 from datasets import data_sets, transforms_3d
+from datasets.data_transforms_3d import *
 from core.utils import Path as Pth
 from core.utils import TextLogger
 
@@ -53,100 +53,78 @@ random.seed(0)
 
 class DataLoader3D():
 
-    def __init__(self, n_frames):
+    def __init__(self, clip_size):
         super(DataLoader3D, self).__init__()
 
         self.batch_size_tr = 32
-        self.batch_size_te = 32
-        self.n_workers_tr = 8
-        self.n_workers_te = 8
+        self.batch_size_vl = 32
+        self.n_workers = 1
         self.img_dim_resize = 256
         self.img_dim_crop = 224
         self.upscale_factor_train = 1.4
         self.upscale_factor_val = 1.0
+        self.clip_size = clip_size
         self.n_clips = 1
-        self.clip_size = n_frames
-        self.step_size = 1.0
+        self.step_size = 1
         self.framerate = 12
 
         self.data_folder = Pth('videos/')
-        self.json_data_train = Pth("annotation/something-something-v2-train.json")
-        self.json_data_val = Pth("annotation/something-something-v2-validation.json")
+        self.json_data_tr = Pth("annotation/something-something-v2-train.json")
+        self.json_data_vl = Pth("annotation/something-something-v2-validation.json")
         self.json_data_test = Pth("annotation/something-something-v2-test.json")
         self.json_file_labels = Pth("annotation/something-something-v2-labels.json")
         self.augmentation_mappings = Pth("annotation/augmentation-mappings.json")
         self.augmentation_types_todo = ["left/right", "left/right agnostic", "jitter_fps"]
-        self.transform_pre_train = None
-        self.transform_pre_val = None
-        self.transform_post = None
+        self.norm_mean = [0.485, 0.456, 0.406]
+        self.norm_std = [0.229, 0.224, 0.225]
 
-        self.norm_mean = consts.IMAGENET_RGB_MEAN
-        self.norm_std = consts.IMAGENET_RGB_STD
-
-        ###########
-        # "num_classes": 174,
-        # "clip_size": 72,
 
     def initialize(self):
         # we use custom dataset
-        dataset_tr, dataset_te = self.__get_datasets()
-
-        n_tr = len(dataset_tr)
-        n_te = len(dataset_te)
+        dataset_tr, dataset_vl = self.__get_datasets()
 
         # data loaders
-        loader_tr = DataLoader(dataset_tr, batch_size=self.batch_size_tr, num_workers=self.n_workers_tr, pin_memory=True, drop_last=True, shuffle=True)
-        loader_te = DataLoader(dataset_te, batch_size=self.batch_size_te, num_workers=self.n_workers_te, pin_memory=True, drop_last=True, shuffle=False)
+        loader_tr = DataLoader(dataset_tr, batch_size=self.batch_size_tr, num_workers=self.n_workers, pin_memory=True, drop_last=True, shuffle=True)
+        loader_vl = DataLoader(dataset_vl, batch_size=self.batch_size_vl, num_workers=self.n_workers, pin_memory=True, drop_last=True, shuffle=False)
 
-        return (loader_tr, loader_te, n_tr, n_te)
+        n_tr = len(dataset_tr)
+        n_vl = len(dataset_vl)
+
+        return (loader_tr, loader_vl, n_tr, n_vl)
 
     def __get_datasets(self, ):
-        n_clips = self.n_clips
-        clip_size = self.clip_size
-        step_size = self.step_size
-        framerate = self.framerate
+
+        # define augmentation pipeline
+        self.transform_pre_tr = ComposeMix([[RandomRotationVideo(15), "vid"],[Scale(self.img_dim_resize), "img"],[RandomCropVideo(self.img_dim_crop), "vid"],])
+        self.transform_pre_vl = ComposeMix([[Scale(self.img_dim_resize), "img"],[transforms.ToPILImage(), "img"],[transforms.CenterCrop(self.img_dim_crop), "img"],])
+        self.transform_post = ComposeMix([[transforms.ToTensor(), "img"],[transforms.Normalize(mean=self.norm_mean,  std=self.norm_std), "img"]])
 
         dataset_tr = data_sets.VideoFolder(root=self.data_folder,
-                                           json_file_input=self.json_data_train,
+                                           json_file_input=self.json_data_tr,
                                            json_file_labels=self.json_file_labels,
-                                           clip_size=clip_size,
-                                           nclips=n_clips,
-                                           step_size=step_size,
-                                           framerate=framerate,
+                                           clip_size=self.clip_size,
+                                           nclips=self.n_clips,
+                                           step_size=self.step_size,
+                                           framerate=self.framerate,
                                            is_val=False,
-                                           transform_pre=self.transform_pre_train,
+                                           transform_pre=self.transform_pre_tr,
                                            transform_post=self.transform_post,
                                            augmentation_mappings_json=self.augmentation_mappings,
                                            augmentation_types_todo=self.augmentation_types_todo,
                                            get_item_id=False)
 
-        dataset_te = data_sets.VideoFolder(root=self.data_folder,
-                                         json_file_input=self.json_data_val,
+        dataset_vl = data_sets.VideoFolder(root=self.data_folder,
+                                         json_file_input=self.json_data_vl,
                                          json_file_labels=self.json_file_labels,
-                                         clip_size=clip_size,
-                                         nclips=n_clips,
-                                         step_size=step_size,
-                                         framerate=framerate,
+                                         clip_size=self.clip_size,
+                                         nclips=self.n_clips,
+                                         step_size=self.step_size,
+                                         framerate=self.framerate,
                                          is_val=True,
-                                         transform_pre=self.transform_pre_val,
+                                         transform_pre=self.transform_pre_vl,
                                          transform_post=self.transform_post,
                                          get_item_id=True)
 
-        return (dataset_tr, dataset_te)
-
-    def __get_transforms(self):
-        transforms_tr = transforms.Compose([transforms_3d.RandomResizedCrop(self.img_dim_resize, self.img_dim_crop, p=1.0, consistent=True),
-                                            transforms_3d.RandomHorizontalFlip(consistent=True),
-                                            transforms_3d.ToTensor(),
-                                            transforms_3d.Normalize(self.norm_mean, self.norm_std),
-                                            transforms_3d.Stack(dim=1)])
-
-        transforms_te = transforms.Compose([transforms_3d.Resize(size=self.img_dim_resize),
-                                            transforms_3d.CenterCrop(size=self.img_dim_crop),
-                                            transforms_3d.ToTensor(),
-                                            transforms_3d.Normalize(self.norm_mean, self.norm_std),
-                                            transforms_3d.Stack(dim=1)])
-
-        return (transforms_tr, transforms_te)
+        return (dataset_tr, dataset_vl)
 
 # endregion

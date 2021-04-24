@@ -54,20 +54,20 @@ class Classification():
         best_pretext_epoch: optional arg for init the model.
         """
 
-        model_name = ''
-        model_root_path = Pth('models',)
+        model_name = 'ss2_vivit_%s' % (utils.timestamp())
+        model_root_path = Pth('models/%s', (model_name,))
         gpu_ids = [0]
         n_epochs = 100
-        n_frames = 16
+        clip_size = 16
         batch_size_tr = 32
         batch_size_te = 32
-        input_shape = (n_frames, 3, 224, 224)
+        input_shape = (clip_size, 3, 224, 224)
 
         # building data
-        loader_tr, loader_te, n_tr, n_te = data_loaders.DataLoader3D(n_frames).initialize()
+        loader_tr, loader_te, n_tr, n_te = data_loaders.DataLoader3D(clip_size).initialize()
 
         # building the model
-        model = ViViT(n_frames, is_train=True)
+        model = ViViT(clip_size, is_train=True)
         pytorch_utils.model_summary(model, input_size=input_shape, batch_size=-1, device='cpu')
         model = pytorch_utils.parallelize_model(model, gpu_ids)
         model = model.cuda()

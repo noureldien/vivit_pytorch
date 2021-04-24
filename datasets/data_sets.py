@@ -31,23 +31,17 @@ import random
 import traceback
 import numpy as np
 import re
-from skvideo.io import FFmpegReader
 from PIL import Image
+import subprocess
+from skvideo.io import FFmpegReader
 
 import torch
 from torch.utils import data
 
 from datasets.data_augmentor import Augmentor
-from datasets.data_parser import WebmDataset
+from datasets.data_parser import Mp4Dataset
 from core import utils, consts
 from core.utils import Path as Pth
-from core.utils import TextLogger
-
-# region Consts
-
-ffprobe = sh.ffprobe.bake('-v', 'error', '-show_entries', 'format=start_time,duration')
-
-# endregion
 
 class VideoFolder(data.Dataset):
 
@@ -56,7 +50,7 @@ class VideoFolder(data.Dataset):
                  augmentation_mappings_json=None, augmentation_types_todo=None,
                  get_item_id=False, is_test=False, framerate=None):
 
-        self.dataset_object = WebmDataset(json_file_input, json_file_labels, root, is_test=is_test)
+        self.dataset_object = Mp4Dataset(json_file_input, json_file_labels, root, is_test=is_test)
         self.json_data = self.dataset_object.json_data
         self.classes = self.dataset_object.classes
         self.classes_dict = self.dataset_object.classes_dict
@@ -73,11 +67,12 @@ class VideoFolder(data.Dataset):
         self.framerate = framerate
 
     def __getitem__(self, index):
+
         item = self.json_data[index]
 
         framerate_sampled = self.augmentor.jitter_fps(self.framerate)
-
         optional_args = {"-r": "%d" % framerate_sampled}
+
         duration = self.get_duration(item.path)
 
         if duration is not None:
@@ -92,8 +87,7 @@ class VideoFolder(data.Dataset):
             for img in reader.nextFrame():
                 imgs.append(img)
         except (RuntimeError, ZeroDivisionError) as exception:
-            print('{}: WEBM reader cannot open {}. Empty '
-                  'list returned.'.format(type(exception).__name__, item.path))
+            print('{}: MP4 reader cannot open {}. Empty list returned.'.format(type(exception).__name__, item.path))
 
         imgs = self.transform_pre(imgs)
         imgs, label = self.augmentor(imgs, item.label)
@@ -117,8 +111,7 @@ class VideoFolder(data.Dataset):
         imgs = imgs[offset: num_frames_necessary + offset: self.step_size]
 
         if len(imgs) < (self.clip_size * self.nclips):
-            imgs.extend([imgs[-1]] *
-                        ((self.clip_size * self.nclips) - len(imgs)))
+            imgs.extend([imgs[-1]] * ((self.clip_size * self.nclips) - len(imgs)))
 
         # format data to torch
         data = torch.stack(imgs)
@@ -129,9 +122,11 @@ class VideoFolder(data.Dataset):
             return (data, target_idx)
 
     def __len__(self):
-        return len(self.json_data)
+        n_items = len(self.json_data)
+        return n_items
 
     def get_duration(self, file):
-        cmd_output = ffprobe(file)
-        start_time, duration = re.findall("\d+\.\d+", str(cmd_output.stdout))
-        return float(duration) - float(start_time)
+
+        result = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', file], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        duration = float(result.stdout)
+        return duration

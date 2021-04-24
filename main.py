@@ -34,12 +34,12 @@ import numpy as np
 
 from core import utils, config_utils, image_utils, consts
 from core.utils import Path as Pth
-from experiments import exp_classification
+from experiments import exp_ss2
 from scripts.train import train
 from scripts.eval import eval
 
 utils.print_boxed_message([
-    'THIS IMPLEMENTATION IS USING PYTORCH',
+    '##### THIS IMPLEMENTATION IS USING PYTORCH',
     'HOWEVER, THE CODE ASLO PROVIDES KERAS IMPLEMENTATION'])
 
 

@@ -18,11 +18,11 @@ from core import consts, metrics, pytorch_utils
 
 class ViViT(nn.Module):
 
-    def __init__(self, n_frames, is_train):
+    def __init__(self, clip_size, is_train):
         super(ViViT, self).__init__()
 
         self.is_train = is_train
-        self.n_frames = n_frames
+        self.clip_size = clip_size
 
         # init layers of the classifier
         self._init_layers()
@@ -43,11 +43,10 @@ class ViViT(nn.Module):
     def _init_layers(self):
 
         # get configs of the model
-        n_frames = self.n_frames
+        clip_size = self.clip_size
         n_classes = 5
         n_classes = 174
-        image_size_resize = 256
-        image_size_crop = 224
+        image_size = 224
         image_patch_size = 16
         dim = 192
         depth = 4
@@ -61,12 +60,12 @@ class ViViT(nn.Module):
 
         assert pool in {'cls', 'mean'}, 'pool type must be either cls (cls token) or mean (mean pooling)'
 
-        assert image_size_crop % image_patch_size == 0, 'Image dimensions must be divisible by the patch size.'
-        n_patches = (image_size_crop // image_patch_size) ** 2
+        assert image_size % image_patch_size == 0, 'Image dimensions must be divisible by the patch size.'
+        n_patches = (image_size // image_patch_size) ** 2
         patch_dim = in_channels * image_patch_size ** 2
         self.to_patch_embedding = nn.Sequential(Rearrange('b t c (h p1) (w p2) -> b t (h w) (p1 p2 c)', p1=image_patch_size, p2=image_patch_size), nn.Linear(patch_dim, dim), )
 
-        self.pos_embedding = nn.Parameter(torch.randn(1, n_frames, n_patches + 1, dim))
+        self.pos_embedding = nn.Parameter(torch.randn(1, clip_size, n_patches + 1, dim))
         self.space_token = nn.Parameter(torch.randn(1, 1, dim))
         self.space_transformer = Transformer(dim, depth, heads, dim_head, dim * scale_dim, dropout)
 
@@ -79,15 +78,6 @@ class ViViT(nn.Module):
         self.mlp_head = nn.Sequential(nn.LayerNorm(dim), nn.Linear(dim, n_classes))
 
     def forward(self, x):
-        """
-        Input shape B, C, T, H, W
-        B: Batch size
-        C: Image channels (C=3)
-        H: Image Height
-        W: Image Width
-        """
-
-        B, T, C, H, W = pytorch_utils.get_shape(x)
 
         x = self.to_patch_embedding(x)
         b, t, n, _ = x.shape # batch size, time, n_image_patches,

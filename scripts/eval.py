@@ -25,10 +25,10 @@ For evaluating the model.
 """
 
 from core import utils
-from experiments import exp_classification
+from experiments import exp_ss2
 
 def eval():
-    exp = exp_classification.Classification()
+    exp = exp_ss2.Classification()
     exp.eval()
 
 if __name__ == '__main__':
