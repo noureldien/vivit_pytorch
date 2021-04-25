@@ -41,13 +41,7 @@ class Classification():
 
     def __init__(self):
         super().__init__()
-        self.model_root_path = None
-        self.input_shape = None
-        self.logger = None
-        self.is_training_required = None
-
-        # init some required variables
-        self.model_root_path = ''
+        pass
 
     def train(self, ):
         """
