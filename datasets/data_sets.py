@@ -107,6 +107,7 @@ class VideoFolder(data.Dataset):
 
         # stack images
         data = torch.stack(imgs) # (T, C, H, W)
+        data = data.permute(1, 0, 2, 3) # (C, T, H, W)
 
         return (data, target_idx)
 

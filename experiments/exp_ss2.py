@@ -32,7 +32,9 @@ import numpy as np
 from core import utils, plot_utils, consts, data_utils, pytorch_utils, pytorch_learners
 from core.utils import TextLogger, Path as Pth
 from datasets import data_loaders
-from modules.vivit import ViViT
+from modules.vivit_v1 import ViViT as ViViT_V1
+from modules.vivit_v2 import ViViT as ViViT_V2
+from modules.vivit_v3 import ViViT as ViViT_V3
 import modules
 
 class Classification():
@@ -56,23 +58,23 @@ class Classification():
 
         model_name = 'ss2_vivit_%s' % (utils.timestamp())
         model_root_path = Pth('models/%s', (model_name,))
-        gpu_ids = [0]
         n_epochs = 100
         clip_size = 16
         batch_size = 32
         n_workers = 8
         n_classes = 5
         # n_classes = 174
-        input_shape = (clip_size, 3, 224, 224)
+        input_shape = (3, clip_size, 224, 224)
 
         # building data
         loader_tr, loader_te, n_tr, n_te = data_loaders.DataLoader3D(n_classes, batch_size, clip_size, n_workers).initialize()
 
         # building the model
-        model = ViViT(n_classes, clip_size, is_train=True)
-        pytorch_utils.model_summary(model, input_size=input_shape, batch_size=-1, device='cpu')
-        model = pytorch_utils.parallelize_model(model, gpu_ids)
+        # model = ViViT_V1(n_classes, clip_size, is_train=True)
+        # model = ViViT_V2(n_classes=n_classes, t=clip_size, model_type=3)
+        model = ViViT_V3(num_classes=n_classes, clip_size=clip_size)
         model = model.cuda()
+        pytorch_utils.model_summary(model, input_size=input_shape, batch_size=-1, device='cuda')
 
         # callbacks
         callbacks = []
