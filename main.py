@@ -45,4 +45,5 @@ classification = exp_ss2.Classification()
 classification.train()
 
 # for evaluation
+# classification = exp_ss2.Classification()
 # eval()
