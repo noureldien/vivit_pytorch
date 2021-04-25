@@ -66,7 +66,7 @@ class Classification():
         input_shape = (clip_size, 3, 224, 224)
 
         # building data
-        loader_tr, loader_te, n_tr, n_te = data_loaders.DataLoader3D(batch_size, clip_size, n_workers).initialize()
+        loader_tr, loader_te, n_tr, n_te = data_loaders.DataLoader3D(n_classes, batch_size, clip_size, n_workers).initialize()
 
         # building the model
         model = ViViT(n_classes, clip_size, is_train=True)

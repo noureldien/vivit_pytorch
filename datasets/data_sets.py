@@ -25,13 +25,7 @@ The class VideoFolder is borrowed from:
 https://github.com/TwentyBN/something-something-v2-baseline/blob/master/data_loader_skvideo.py
 """
 
-import sh
-import sys
-import random
-import traceback
 import numpy as np
-import re
-from PIL import Image
 import subprocess
 from skvideo.io import FFmpegReader
 

@@ -40,13 +40,14 @@ from core.utils import Path as Pth
 from core.utils import TextLogger
 from datasets.data_parser import Mp4Dataset
 
-
 def reduce_annotation_classes():
 
     # how many classes to leave
     n_classes = 5
 
+    root_path = Pth('videos/')
     json_labels_path = Pth("annotation/something-something-v2-labels.json")
+    json_labels_mini_path = Pth("annotation/something-something-v2-labels-mini.json")
 
     json_data_tr_path = Pth("annotation/something-something-v2-train.json")
     json_data_vl_path = Pth("annotation/something-something-v2-validation.json")
@@ -54,22 +55,35 @@ def reduce_annotation_classes():
     json_data_mini_tr_path = Pth("annotation/something-something-v2-mini-train.json")
     json_data_mini_vl_path = Pth("annotation/something-something-v2-mini-validation.json")
 
-    root_path = Pth('videos/')
-
     json_data_mini_tr = __filter_classes(n_classes, json_data_tr_path, json_labels_path, root_path)
     json_data_mini_vl = __filter_classes(n_classes, json_data_vl_path, json_labels_path, root_path)
 
     utils.json_dump(json_data_mini_tr, json_data_mini_tr_path)
     utils.json_dump(json_data_mini_vl, json_data_mini_vl_path)
 
-def test_reduced_annotation():
-    # how many classes to leave
-    n_classes = 5
+    json_labels_mini = {}
+    idx = 0
+    for item in json_data_mini_vl:
+        item_template = item['template']
+        item_template = __clean_template(item_template)
+        if item_template not in json_labels_mini:
+            json_labels_mini[item_template] = str(idx)
+            idx += 1
+    utils.json_dump(json_labels_mini, json_labels_mini_path)
 
+
+def test_reduced_annotation():
+
+    n_classes = 5
+    root_path = Pth('videos/')
     json_labels_path = Pth("annotation/something-something-v2-labels.json")
+    json_labels = utils.json_load(json_labels_path)
 
     json_data_mini_tr_path = Pth("annotation/something-something-v2-mini-train.json")
     json_data_mini_vl_path = Pth("annotation/something-something-v2-mini-validation.json")
+
+    dataset_object_tr = Mp4Dataset(json_data_mini_tr_path, json_labels_path, root_path, is_test=False)
+    classes_dict = dataset_object_tr.classes_dict
 
     json_data_mini_tr = utils.json_load(json_data_mini_tr_path)
     json_data_mini_vl = utils.json_load(json_data_mini_vl_path)

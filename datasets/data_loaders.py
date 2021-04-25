@@ -46,7 +46,7 @@ random.seed(0)
 
 class DataLoader3D():
 
-    def __init__(self, batch_size, clip_size, n_workers):
+    def __init__(self, n_classes, batch_size, clip_size, n_workers):
         super(DataLoader3D, self).__init__()
 
         self.batch_size = batch_size
@@ -61,18 +61,22 @@ class DataLoader3D():
         self.framerate = 12
 
         self.data_folder = Pth('videos/')
-
-        # self.json_data_tr = Pth("annotation/something-something-v2-train.json")
-        # self.json_data_vl = Pth("annotation/something-something-v2-validation.json")
-
-        self.json_data_tr = Pth("annotation/something-something-v2-mini-train.json")
-        self.json_data_vl = Pth("annotation/something-something-v2-mini-validation.json")
-
-        self.json_file_labels = Pth("annotation/something-something-v2-labels.json")
         self.augmentation_mappings = Pth("annotation/augmentation-mappings.json")
         self.augmentation_types_todo = ["left/right", "left/right agnostic", "jitter_fps"]
         self.norm_mean = [0.485, 0.456, 0.406]
         self.norm_std = [0.229, 0.224, 0.225]
+
+        assert n_classes in [174, 5]
+        if n_classes == 174:
+            self.json_labels = Pth("annotation/something-something-v2-labels.json")
+            self.json_data_tr = Pth("annotation/something-something-v2-train.json")
+            self.json_data_vl = Pth("annotation/something-something-v2-validation.json")
+        elif n_classes == 5:
+            self.json_labels = Pth("annotation/something-something-v2-labels-mini.json")
+            self.json_data_tr = Pth("annotation/something-something-v2-mini-train.json")
+            self.json_data_vl = Pth("annotation/something-something-v2-mini-validation.json")
+        else:
+            raise Exception('Unknown number of classes: %d' % (n_classes))
 
 
     def initialize(self):
@@ -97,7 +101,7 @@ class DataLoader3D():
 
         dataset_tr = data_sets.VideoFolder(root=self.data_folder,
                                            json_file_input=self.json_data_tr,
-                                           json_file_labels=self.json_file_labels,
+                                           json_file_labels=self.json_labels,
                                            clip_size=self.clip_size,
                                            n_clips=self.n_clips,
                                            step_size=self.step_size,
@@ -110,7 +114,7 @@ class DataLoader3D():
 
         dataset_vl = data_sets.VideoFolder(root=self.data_folder,
                                          json_file_input=self.json_data_vl,
-                                         json_file_labels=self.json_file_labels,
+                                         json_file_labels=self.json_labels,
                                          clip_size=self.clip_size,
                                          n_clips=self.n_clips,
                                          step_size=self.step_size,
