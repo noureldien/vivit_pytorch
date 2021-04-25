@@ -149,7 +149,7 @@ class ClassifierLearner():
 
                     tt2 = time.time()
                     duration = tt2 - tt1
-                    sys.stdout.write('\r%04ds | epoch %02d/%02d | b_te %02d/%02d | l_vl %.02f | m_vl %02.02f    ' % (duration, epoch_num, n_epochs, batch_num, n_iter_te, loss_b, acc_b))
+                    sys.stdout.write('\r%04ds | epoch %02d/%02d | b_vl %02d/%02d | l_vl %.02f | m_vl %02.02f    ' % (duration, epoch_num, n_epochs, batch_num, n_iter_te, loss_b, acc_b))
 
             tt2 = time.time()
             duration = tt2 - tt1
@@ -224,7 +224,7 @@ class ClassifierLearner():
 
                 tt2 = time.time()
                 duration = tt2 - tt1
-                sys.stdout.write('\r%04ds | b_te %02d/%02d | l_vl %.02f | m_vl %02.02f    ' % (duration, batch_num, n_iter_te, loss_b, acc_b))
+                sys.stdout.write('\r%04ds | b_vl %02d/%02d | l_vl %.02f | m_vl %02.02f    ' % (duration, batch_num, n_iter_te, loss_b, acc_b))
 
             tt2 = time.time()
             duration = tt2 - tt1
@@ -329,7 +329,7 @@ class ClassifierLearner():
 
                 tt2 = time.time()
                 duration = tt2 - tt1
-                sys.stdout.write('\r%04ds | epoch %02d/%02d | b_te %02d/%02d | l_vl %.02f | m_vl %02.02f    ' % (duration, epoch_num, n_epochs, batch_num, n_iter_te, loss_b, acc_b))
+                sys.stdout.write('\r%04ds | epoch %02d/%02d | b_vl %02d/%02d | l_vl %.02f | m_vl %02.02f    ' % (duration, epoch_num, n_epochs, batch_num, n_iter_te, loss_b, acc_b))
 
             tt2 = time.time()
             duration = tt2 - tt1
