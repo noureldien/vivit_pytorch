@@ -5,7 +5,7 @@ https://github.com/TwentyBN/smth-smth-v2-baseline-with-models/blob/master/data_a
 
 import json
 import numpy as np
-from datasets.data_transforms_3d import *
+from datasets.transforms_3d import *
 
 class Augmentor(object):
     def __init__(self, augmentation_mappings_json=None, augmentation_types_todo=None, fps_jitter_factors=[1, 0.75, 0.5]):

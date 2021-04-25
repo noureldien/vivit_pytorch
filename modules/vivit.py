@@ -18,11 +18,12 @@ from core import consts, metrics, pytorch_utils
 
 class ViViT(nn.Module):
 
-    def __init__(self, clip_size, is_train):
+    def __init__(self, n_classes, clip_size, is_train):
         super(ViViT, self).__init__()
 
         self.is_train = is_train
         self.clip_size = clip_size
+        self.n_classes = n_classes
 
         # init layers of the classifier
         self._init_layers()
@@ -44,8 +45,7 @@ class ViViT(nn.Module):
 
         # get configs of the model
         clip_size = self.clip_size
-        n_classes = 5
-        n_classes = 174
+        n_classes = self.n_classes
         image_size = 224
         image_patch_size = 16
         dim = 192

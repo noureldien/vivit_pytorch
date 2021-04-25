@@ -1,578 +1,259 @@
-# !/usr/bin/env python
-# -*- coding: UTF-8 -*-
-
-########################################################################
-# GNU General Public License v3.0
-# GNU GPLv3
-# Copyright (c) 2019, Noureldien Hussein
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-########################################################################
-
-import random
-import numbers
-import math
-import cv2
-import collections
-import numpy as np
-from PIL import ImageOps, Image, ImageFilter
-from joblib import Parallel, delayed
+"""
+Code borrowed from:
+https://raw.githubusercontent.com/TwentyBN/smth-smth-v2-baseline-with-models/master/transforms_video.py
+"""
 
 import torch
-import torchvision
-import torchvision.transforms.functional as F
-from torchvision import transforms
+import cv2
+import numpy as np
+import numbers
+import collections
+import random
 
-# region Spatial Transforms
+class ComposeMix(object):
+    r"""Composes several transforms together. It takes a list of
+    transformations, where each element odf transform is a list with 2
+    elements. First being the transform function itself, second being a string
+    indicating whether it's an "img" or "vid" transform
+    Args:
+        transforms (List[Transform, "<type>"]): list of transforms to compose.
+                                                <type> = "img" | "vid"
+    Example:
+        >>> transforms.ComposeMix([
+        [RandomCropVideo(84), "vid"],
+        [torchvision.transforms.ToTensor(), "img"],
+        [torchvision.transforms.Normalize(
+                   mean=[0.485, 0.456, 0.406],  # default values for imagenet
+                   std=[0.229, 0.224, 0.225]), "img"]
+    ])
+    """
 
-class Padding:
-    def __init__(self, pad):
-        self.pad = pad
+    def __init__(self, transforms):
+        self.transforms = transforms
 
-    def __call__(self, img):
-        return ImageOps.expand(img, border=self.pad, fill=0)
+    def __call__(self, imgs):
+        for t in self.transforms:
+            if t[1] == "img":
+                for idx, img in enumerate(imgs):
+                    imgs[idx] = t[0](img)
+            elif t[1] == "vid":
+                imgs = t[0](imgs)
+            else:
+                print("Please specify the transform type")
+                raise ValueError
+        return imgs
 
-class Resize:
-    def __init__(self, size, interpolation=Image.NEAREST):
-        assert isinstance(size, int) or (isinstance(size, collections.Iterable) and len(size) == 2)
+class RandomCropVideo(object):
+    r"""Crop the given video frames at a random location. Crop location is the
+    same for all the frames.
+    Args:
+        size (sequence or int): Desired output size of the crop. If size is an
+            int instead of sequence like (w, h), a square crop (size, size) is
+            made.
+        padding (int or sequence, optional): Optional padding on each border
+            of the image. Default is 0, i.e no padding. If a sequence of length
+            4 is provided, it is used to pad left, top, right, bottom borders
+            respectively.
+        pad_method (cv2 constant): Method to be used for padding.
+    """
+
+    def __init__(self, size, padding=0, pad_method=cv2.BORDER_CONSTANT):
+        if isinstance(size, numbers.Number):
+            self.size = (int(size), int(size))
+        else:
+            self.size = size
+        self.padding = padding
+        self.pad_method = pad_method
+
+    def __call__(self, imgs):
+        """
+        Args:
+            img (numpy.array): Video to be cropped.
+        Returns:
+            numpy.array: Cropped video.
+        """
+        th, tw = self.size
+        h, w = imgs[0].shape[:2]
+        x1 = np.random.randint(0, w - tw)
+        y1 = np.random.randint(0, h - th)
+        for idx, img in enumerate(imgs):
+            if self.padding > 0:
+                img = cv2.copyMakeBorder(img, self.padding, self.padding,
+                                         self.padding, self.padding,
+                                         self.pad_method)
+            # sample crop locations if not given
+            # it is necessary to keep cropping same in a video
+            img_crop = img[y1:y1 + th, x1:x1 + tw]
+            imgs[idx] = img_crop
+        return imgs
+
+class RandomHorizontalFlipVideo(object):
+    """Horizontally flip the given video frames randomly with a given probability.
+    Args:
+        p (float): probability of the image being flipped. Default value is 0.5
+    """
+
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def __call__(self, imgs):
+        """
+        Args:
+            imgs (numpy.array): Video to be flipped.
+        Returns:
+            numpy.array: Randomly flipped video.
+        """
+        if random.random() < self.p:
+            for idx, img in enumerate(imgs):
+                imgs[idx] = cv2.flip(img, 1)
+        return imgs
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(p={})'.format(self.p)
+
+class RandomReverseTimeVideo(object):
+    """Reverse the given video frames in time randomly with a given probability.
+    Args:
+        p (float): probability of the image being flipped. Default value is 0.5
+    """
+
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def __call__(self, imgs):
+        """
+        Args:
+            imgs (numpy.array): Video to be flipped.
+        Returns:
+            numpy.array: Randomly flipped video.
+        """
+        if random.random() < self.p:
+            imgs = imgs[::-1]
+        return imgs
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(p={})'.format(self.p)
+
+class RandomRotationVideo(object):
+    """Rotate the given video frames randomly with a given degree.
+    Args:
+        degree (float): degrees used to rotate the video
+    """
+
+    def __init__(self, degree=10):
+        self.degree = degree
+
+    def __call__(self, imgs):
+        """
+        Args:
+            imgs (numpy.array): Video to be rotated.
+        Returns:
+            numpy.array: Randomly rotated video.
+        """
+        h, w = imgs[0].shape[:2]
+        degree_sampled = np.random.choice(
+            np.arange(-self.degree, self.degree, 0.5))
+        M = cv2.getRotationMatrix2D((w / 2, h / 2), degree_sampled, 1)
+
+        for idx, img in enumerate(imgs):
+            imgs[idx] = cv2.warpAffine(img, M, (w, h))
+
+        return imgs
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(degree={})'.format(self.degree_sampled)
+
+class IdentityTransform(object):
+    """
+    Returns same video back
+    """
+
+    def __init__(self, ):
+        pass
+
+    def __call__(self, imgs):
+        return imgs
+
+class Scale(object):
+    r"""Rescale the input image to the given size.
+    Args:
+        size (sequence or int): Desired output size. If size is a sequence like
+            (w, h), output size will be matched to this. If size is an int,
+            smaller edge of the image will be matched to this number.
+            i.e, if height > width, then image will be rescaled to
+            (size * height / width, size)
+        interpolation (int, optional): Desired interpolation. Default is
+            ``cv2.INTER_LINEAR``
+    """
+
+    def __init__(self, size, interpolation=cv2.INTER_LINEAR):
+        assert isinstance(size, int) or (isinstance(
+            size, collections.Iterable) and len(size) == 2)
         self.size = size
         self.interpolation = interpolation
 
-    def __call__(self, imgmap):
-        img1 = imgmap[0]
+    def __call__(self, img):
+        """
+        Args:
+            img (numpy.array): Image to be scaled.
+        Returns:
+            numpy.array: Rescaled image.
+        """
         if isinstance(self.size, int):
-            w, h = img1.size
+            h, w = img.shape[:2]
             if (w <= h and w == self.size) or (h <= w and h == self.size):
-                return imgmap
+                return img
             if w < h:
                 ow = self.size
                 oh = int(self.size * h / w)
-                return [i.resize((ow, oh), self.interpolation) for i in imgmap]
+                if ow < w:
+                    return cv2.resize(img, (ow, oh), cv2.INTER_AREA)
+                else:
+                    return cv2.resize(img, (ow, oh))
             else:
                 oh = self.size
                 ow = int(self.size * w / h)
-                return [i.resize((ow, oh), self.interpolation) for i in imgmap]
-        else:
-            return [i.resize(self.size, self.interpolation) for i in imgmap]
-
-class CenterCrop:
-    def __init__(self, size, ):
-        if isinstance(size, numbers.Number):
-            self.size = (int(size), int(size))
-        else:
-            self.size = size
-
-    def __call__(self, imgmap):
-        img1 = imgmap[0]
-        w, h = img1.size
-        th, tw = self.size
-        x1 = int(round((w - tw) / 2.))
-        y1 = int(round((h - th) / 2.))
-        return [i.crop((x1, y1, x1 + tw, y1 + th)) for i in imgmap]
-
-class Rotation:
-    """
-    Rotate the frames in the video segment by the given angle.
-    """
-
-    def __init__(self, degree):
-        self.degree = degree
-
-    def __call__(self, imgmap):
-        imgmap = [i.rotate(self.degree, expand=False) for i in imgmap]
-
-        return imgmap
-
-# endregion
-
-# region Spatial Transforms (Random)
-
-class RandomCrop:
-    def __init__(self, size, p=0.8, consistent=True):
-        if isinstance(size, numbers.Number):
-            self.size = (int(size), int(size))
-        else:
-            self.size = size
-        self.consistent = consistent
-        self.threshold = p
-
-    def __call__(self, imgmap):
-        img1 = imgmap[0]
-        w, h = img1.size
-        if self.size is not None:
-            th, tw = self.size
-            if w == tw and h == th:
-                return imgmap
-            if self.consistent:
-                if random.random() < self.threshold:
-                    x1 = random.randint(0, w - tw)
-                    y1 = random.randint(0, h - th)
+                if oh < h:
+                    return cv2.resize(img, (ow, oh), cv2.INTER_AREA)
                 else:
-                    x1 = int(round((w - tw) / 2.))
-                    y1 = int(round((h - th) / 2.))
-                return [i.crop((x1, y1, x1 + tw, y1 + th)) for i in imgmap]
-            else:
-                result = []
-                for i in imgmap:
-                    if random.random() < self.threshold:
-                        x1 = random.randint(0, w - tw)
-                        y1 = random.randint(0, h - th)
-                    else:
-                        x1 = int(round((w - tw) / 2.))
-                        y1 = int(round((h - th) / 2.))
-                    result.append(i.crop((x1, y1, x1 + tw, y1 + th)))
-                return result
+                    return cv2.resize(img, (ow, oh))
         else:
-            return imgmap
+            return cv2.resize(img, tuple(self.size))
 
-class RandomResizedCrop:
-    def __init__(self, resize_dim, crop_dim, interpolation=Image.BILINEAR, consistent=True, p=1.0):
-        self.resize_dim = resize_dim
-        self.crop_dim = crop_dim
-        self.interpolation = interpolation
-        self.consistent = consistent
-        self.threshold = p
-
-        self.resize = Resize(self.resize_dim, interpolation=self.interpolation)
-        self.center_crop = CenterCrop(self.crop_dim)
-
-    def __call__(self, imgmap):
-        img1 = imgmap[0]
-        if random.random() < self.threshold:  # do RandomSizedCrop
-            for attempt in range(10):
-                area = img1.size[0] * img1.size[1]
-                target_area = random.uniform(0.5, 1) * area
-                aspect_ratio = random.uniform(3. / 4, 4. / 3)
-
-                w = int(round(math.sqrt(target_area * aspect_ratio)))
-                h = int(round(math.sqrt(target_area / aspect_ratio)))
-
-                if self.consistent:
-                    if random.random() < 0.5:
-                        w, h = h, w
-                    if w <= img1.size[0] and h <= img1.size[1]:
-                        x1 = random.randint(0, img1.size[0] - w)
-                        y1 = random.randint(0, img1.size[1] - h)
-                        imgmap = [i.crop((x1, y1, x1 + w, y1 + h)) for i in imgmap]
-                        for i in imgmap:
-                            assert (i.size == (w, h))
-                        imgmap = [i.resize((self.crop_dim, self.crop_dim), self.interpolation) for i in imgmap]
-                        return imgmap
-                else:
-                    result = []
-                    for i in imgmap:
-                        if random.random() < 0.5:
-                            w, h = h, w
-                        if w <= img1.size[0] and h <= img1.size[1]:
-                            x1 = random.randint(0, img1.size[0] - w)
-                            y1 = random.randint(0, img1.size[1] - h)
-                            result.append(i.crop((x1, y1, x1 + w, y1 + h)))
-                            assert (result[-1].size == (w, h))
-                        else:
-                            result.append(i)
-
-                    assert len(result) == len(imgmap)
-                    imgmap = [i.resize((self.crop_dim, self.crop_dim), self.interpolation) for i in result]
-                    return imgmap
-
-            # Fallback
-            imgmap = self.center_crop(self.resize(imgmap))
-            return imgmap
-        else:
-            # don't do RandomSizedCrop, do CenterCrop
-            imgmap = self.center_crop(imgmap)
-            return imgmap
-
-class RandomHorizontalFlip:
-    def __init__(self, p=0.5, consistent=True):
-        self.consistent = consistent
-        self.threshold = p
-
-    def __call__(self, imgmap):
-        if self.consistent:
-            if random.random() < self.threshold:
-                return [i.transpose(Image.FLIP_LEFT_RIGHT) for i in imgmap]
-            else:
-                return imgmap
-        else:
-            result = []
-            for i in imgmap:
-                if random.random() < self.threshold:
-                    result.append(i.transpose(Image.FLIP_LEFT_RIGHT))
-                else:
-                    result.append(i)
-            assert len(result) == len(imgmap)
-            return result
-
-class RandomVerticalFlip:
-    def __init__(self, p=0.5, consistent=True):
-        self.consistent = consistent
-        self.threshold = p
-
-    def __call__(self, imgmap):
-        if self.consistent:
-            if random.random() < self.threshold:
-                return [i.transpose(Image.FLIP_TOP_BOTTOM) for i in imgmap]
-            else:
-                return imgmap
-        else:
-            result = []
-            for i in imgmap:
-                if random.random() < self.threshold:
-                    result.append(i.transpose(Image.FLIP_TOP_BOTTOM))
-                else:
-                    result.append(i)
-            assert len(result) == len(imgmap)
-            return result
-
-class RandomRotation:
-    """
-    Rotate the frames in the video segment by a randomly sampled angle from a certain range.
+class UnNormalize(object):
+    """Unnormalize an tensor image with mean and standard deviation.
+    Given mean: (R, G, B) and std: (R, G, B),
+    will normalize each channel of the torch.*Tensor, i.e.
+    channel = (channel x std) + mean
+    Args:
+        mean (sequence): Sequence of means for R, G, B channels respecitvely.
+        std (sequence): Sequence of standard deviations for R, G, B channels
+            respecitvely.
     """
 
-    def __init__(self, degree, p=1.0, consistent=True):
-        self.degree = degree
-        self.consistent = consistent
-        self.threshold = p
+    def __init__(self, mean, std):
+        self.mean = np.array(mean).astype('float32')
+        self.std = np.array(std).astype('float32')
 
-    def __call__(self, imgmap):
-        if random.random() < self.threshold:
-            if self.consistent:
-                deg = self.__rand_int()
-                imgmap = [i.rotate(deg, expand=False) for i in imgmap]
-            else:
-                imgmap = [i.rotate(self.__rand_int(), expand=False) for i in imgmap]
-
-        return imgmap
-
-    def __rand_int(self):
-        num = np.random.randint(-self.degree, self.degree, 1)[0]
-        return num
-
-class RandomTranslatedCrop:
-    """
-    Translate the center crop of the image by certain displacement ratios (dx, dy).
-    These two ratios are independently and randomly sampled from a certain range.
-    """
-
-    def __init__(self, translation_ratio, size, p=1.0, consistent=True):
-        self.translation_ratio = translation_ratio
-        self.consistent = consistent
-        self.threshold = p
-
-        # target size
-        if isinstance(size, numbers.Number):
-            self.th = self.tw = int(size)
-        else:
-            self.th, self.tw = size
-
-        self.th_half = int(self.th / 2.0)
-        self.tw_half = int(self.tw / 2.0)
-
-    def __call__(self, imgmap):
-        if random.random() < self.threshold:
-            if self.consistent:
-                dx = self.__rand_float()
-                dy = self.__rand_float()
-                imgmap = [self.__translated_center_crop(i, dx, dy) for i in imgmap]
-            else:
-                imgmap = [self.__translated_center_crop(i, self.__rand_float(), self.__rand_float()) for i in imgmap]
-
-        return imgmap
-
-    def __rand_float(self):
-        number = np.random.uniform(-self.translation_ratio, self.translation_ratio, 1)[0]
-        return number
-
-    def __translated_center_crop(self, img, dx, dy):
+    def __call__(self, tensor):
         """
-        Translate the center crop of the image by by x, y pixels,
-        where x = dx * img_width, y = dy * img_height
+        Args:
+            tensor (Tensor): Tensor image of size (C, H, W) to be normalized.
+        Returns:
+            Tensor: Normalized image.
         """
+        if isinstance(tensor, torch.Tensor):
+            self.mean = torch.FloatTensor(self.mean)
+            self.std = torch.FloatTensor(self.std)
 
-        w, h = img.size
-        tw = self.tw
-        th = self.th
+            if (self.std.dim() != tensor.dim() or
+                    self.mean.dim() != tensor.dim()):
+                for i in range(tensor.dim() - self.std.dim()):
+                    self.std = self.std.unsqueeze(-1)
+                    self.mean = self.mean.unsqueeze(-1)
 
-        tw_half = int(tw / 2.0)
-        th_half = int(th / 2.0)
-
-        # translate x0 and y0
-        x0 = int((w / 2.0) + (w * dx))
-        y0 = int((h / 2.0) + (h * dy))
-
-        x1 = x0 - tw_half
-        y1 = y0 - th_half
-        x2 = x1 + tw
-        y2 = y1 + th
-
-        if x1 >= 0 and y1 >= 0 and x2 <= w and y2 <= h:
-            img_target = img.crop((x1, y1, x2, y2))
+            tensor = torch.add(torch.mul(tensor, self.std), self.mean)
         else:
-
-            # x1_s, x2_s, .... => coordinates of the crop in the source image
-            # x1_t, x2_t, .... => coordinates of the crop target the source image
-            if x1 < 0:
-                x1_s = 0
-                x1_t = tw - x2
-            else:
-                x1_s = x1
-                x1_t = 0
-
-            if y1 < 0:
-                y1_s = 0
-                y1_t = th - y2
-            else:
-                y1_s = y1
-                y1_t = 0
-
-            if x2 > w:
-                x2_s = w
-                x2_t = w - x1
-            else:
-                x2_s = x2
-                x2_t = tw
-
-            if y2 > h:
-                y2_s = h
-                y2_t = h - y1
-            else:
-                y2_s = y2
-                y2_t = th
-
-            img_target = np.zeros((th, tw, 3), dtype=np.uint8)
-            img = np.asarray(img)
-            img_target[y1_t:y2_t, x1_t:x2_t] = img[y1_s:y2_s, x1_s:x2_s]
-            img_target = Image.fromarray(img_target)
-
-        return img_target
-
-class RandomResizedCenterCrop:
-    """
-    Scale the center crop of the frame in the video segment by a randomly sampled scaling factor from a certain range.
-    Also, change the aspect ratio of the center crop by a randomly sampled aspect ratio factor from another range.
-    Then, resized the center crop to the acceptable size.
-    """
-
-    def __init__(self, resize_dim, crop_dim, scale, aspect, p=1.0, consistent=True, interpolation=Image.BILINEAR):
-        self.resize_dim = resize_dim
-        self.crop_dim = crop_dim
-        self.scale = scale
-        self.aspect = aspect
-        self.consistent = consistent
-        self.threshold = p
-        self.interpolation = interpolation
-        self.n_attempts = 10
-
-        self.is_scale = scale is not None
-        self.is_aspect = aspect is not None
-
-        self.resize = Resize(self.resize_dim, interpolation=self.interpolation)
-        self.center_crop = CenterCrop(self.crop_dim)
-
-    def __call__(self, imgmap):
-
-        img1 = imgmap[0]
-        if random.random() < self.threshold:
-            for attempt in range(self.n_attempts):
-                area = img1.size[0] * img1.size[1]
-
-                if self.consistent:
-
-                    # w, h of the center crop
-                    w, h = self.__random_dims(area)
-
-                    if random.random() < 0.5:
-                        w, h = h, w
-                    if w <= img1.size[0] and h <= img1.size[1]:
-                        x1 = int(round((img1.size[0] - w) / 2.0))
-                        y1 = int(round((img1.size[1] - h) / 2.0))
-                        imgmap = [i.crop((x1, y1, x1 + w, y1 + h)).resize((self.crop_dim, self.crop_dim), self.interpolation) for i in imgmap]
-                        return imgmap
-                else:
-                    result = []
-                    for i in imgmap:
-
-                        # w, h of the center crop
-                        w, h = self.__random_dims(area)
-
-                        if random.random() < 0.5:
-                            w, h = h, w
-                        if w <= img1.size[0] and h <= img1.size[1]:
-                            x1 = int(round((img1.size[0] - w) / 2.0))
-                            y1 = int(round((img1.size[1] - h) / 2.0))
-                            result.append(i.crop((x1, y1, x1 + w, y1 + h)))
-                        else:
-                            result.append(i)
-
-                    assert len(result) == len(imgmap)
-                    imgmap = [i.resize((self.crop_dim, self.crop_dim), self.interpolation) for i in result]
-                    return imgmap
-
-            # Fallback
-            imgmap = self.center_crop(self.resize(imgmap))
-            return imgmap
-        else:
-            # don't do resize, just center crop
-            imgmap = self.center_crop(imgmap)
-            return imgmap
-
-    def __random_dims(self, area):
-
-        # sample area and aspect ratio
-        target_area = random.uniform(self.scale, 1) if self.is_scale else 1
-        target_area = target_area * area
-
-        aspect_ratio = random.uniform(-self.aspect, self.aspect) if self.is_aspect else 0
-        aspect_ratio = aspect_ratio + 1
-
-        # w, h of the center crop
-        w = int(round(math.sqrt(target_area * aspect_ratio)))
-        h = int(round(math.sqrt(target_area / aspect_ratio)))
-
-        dims = (w, h)
-        return dims
-
-class RandomResizedScale:
-    """
-    Scale the frame in the video segment by a randomly sampled scaling factor from a certain range.
-    """
-
-    def __init__(self, resize_dim, scale, p=1.0, consistent=True, interpolation=Image.BILINEAR):
-        self.resize_dim = resize_dim
-        self.scale = scale
-        self.consistent = consistent
-        self.threshold = p
-        self.interpolation = interpolation
-
-        self.resize = Resize(self.resize_dim, interpolation=self.interpolation)
-
-    def __call__(self, imgmap):
-
-        img1 = imgmap[0]
-        if random.random() < self.threshold:
-            ow, oh = img1.size[0], img1.size[1]
-            if self.consistent:
-                w, h = self.__random_dims(ow, oh)
-                imgmap = [i.resize((w, h), self.interpolation) for i in imgmap]
-                return imgmap
-            else:
-                result = []
-                for i in imgmap:
-                    w, h = self.__random_dims(ow, oh)
-                    i.resize((w, h), self.interpolation)
-                    result.append(i)
-                return imgmap
-
-        else:
-            imgmap = self.resize(imgmap)
-            return imgmap
-
-    def __random_dims(self, w, h):
-
-        # get random scale factor
-        scale = 1 + random.uniform(-self.scale, self.scale)
-
-        # scale the dimensions
-        if w < h:
-            tw = self.resize_dim * scale
-            th = h * tw / float(w)
-        else:
-            th = self.resize_dim * scale
-            tw = w * th / float(h)
-
-        dims = (int(round(tw)), int(round(th)))
-        return dims
-
-class RandomResizedAspect:
-    """
-    Change the aspect ratio of the center crop by a randomly sampled aspect ratio factor from another range.
-    """
-
-    def __init__(self, resize_dim, aspect, p=1.0, consistent=True, interpolation=Image.BILINEAR):
-        self.resize_dim = resize_dim
-        self.aspect = aspect
-        self.consistent = consistent
-        self.threshold = p
-        self.interpolation = interpolation
-
-        self.resize = Resize(self.resize_dim, interpolation=self.interpolation)
-
-    def __call__(self, imgmap):
-
-        img1 = imgmap[0]
-        if random.random() < self.threshold:
-            ow, oh = img1.size[0], img1.size[1]
-            if self.consistent:
-                w, h = self.__random_dims(ow, oh)
-                imgmap = [i.resize((w, h), self.interpolation) for i in imgmap]
-                return imgmap
-            else:
-                result = []
-                for i in imgmap:
-                    w, h = self.__random_dims(ow, oh)
-                    i.resize((w, h), self.interpolation)
-                    result.append(i)
-                return imgmap
-        else:
-            imgmap = self.resize(imgmap)
-            return imgmap
-
-    def __random_dims(self, ow, oh):
-
-        area = ow * oh
-        aspect = 1 + random.uniform(-self.aspect, self.aspect)
-
-        if ow < oh:
-            w = math.sqrt(area * aspect)
-            h = math.sqrt(area / aspect)
-            tw = self.resize_dim
-            th = int(round(h * tw / float(w)))
-        else:
-            h = math.sqrt(area * aspect)
-            w = math.sqrt(area / aspect)
-            th = self.resize_dim
-            tw = int(round(w * th / float(h)))
-
-        dims = (tw, th)
-        return dims
-
-# endregion
-
-# region Misc Transforms
-
-class ToTensor:
-    def __call__(self, imgmap):
-        totensor = transforms.ToTensor()
-        return [totensor(i) for i in imgmap]
-
-class Normalize:
-    def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
-        self.mean = mean
-        self.std = std
-        self.normalize = transforms.Normalize(mean=self.mean, std=self.std)
-
-    def __call__(self, imgmap):
-        imgmap = [self.normalize(i) for i in imgmap]
-        return imgmap
-
-class Stack:
-    def __init__(self, dim):
-        self.dim = dim
-
-    def __call__(self, x):
-        x = torch.stack(x, dim=self.dim)
-        return x
-
-# endregion
+            # Relying on Numpy broadcasting abilities
+            tensor = tensor * self.std + self.mean
+        return tensor

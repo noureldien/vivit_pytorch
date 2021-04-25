@@ -149,7 +149,7 @@ class ClassifierLearner():
 
                     tt2 = time.time()
                     duration = tt2 - tt1
-                    sys.stdout.write('\r%04ds | epoch %02d/%02d | b_te %02d/%02d | l_te %.02f | m_te %02.02f    ' % (duration, epoch_num, n_epochs, batch_num, n_iter_te, loss_b, acc_b))
+                    sys.stdout.write('\r%04ds | epoch %02d/%02d | b_te %02d/%02d | l_vl %.02f | m_vl %02.02f    ' % (duration, epoch_num, n_epochs, batch_num, n_iter_te, loss_b, acc_b))
 
             tt2 = time.time()
             duration = tt2 - tt1
@@ -162,7 +162,7 @@ class ClassifierLearner():
             acc_max_te = max(acc_max_te, acc_te)
             learning_rate = pytorch_utils.get_learning_rates(optimizer, n_gpus)[0]
 
-            epoch_log = '%04ds | epoch %02d/%02d | l_tr %.02f | l_te %.02f | m_tr %02.02f | m_te %02.02f | mm_tr %02.02f | mm_te %02.02f | lr %.04f' % (duration, epoch_num, n_epochs, loss_tr, loss_te, acc_tr, acc_te, acc_max_tr, acc_max_te, learning_rate)
+            epoch_log = '%04ds | epoch %02d/%02d | l_tr %.02f | l_vl %.02f | m_tr %02.02f | m_vl %02.02f | mm_tr %02.02f | mm_te %02.02f | lr %.04f' % (duration, epoch_num, n_epochs, loss_tr, loss_te, acc_tr, acc_te, acc_max_tr, acc_max_te, learning_rate)
             sys.stdout.write('\r' + epoch_log + '\n')
             logger.print_to_file(epoch_log)
 
@@ -224,7 +224,7 @@ class ClassifierLearner():
 
                 tt2 = time.time()
                 duration = tt2 - tt1
-                sys.stdout.write('\r%04ds | b_te %02d/%02d | l_te %.02f | m_te %02.02f    ' % (duration, batch_num, n_iter_te, loss_b, acc_b))
+                sys.stdout.write('\r%04ds | b_te %02d/%02d | l_vl %.02f | m_vl %02.02f    ' % (duration, batch_num, n_iter_te, loss_b, acc_b))
 
             tt2 = time.time()
             duration = tt2 - tt1
@@ -233,7 +233,7 @@ class ClassifierLearner():
             acc_te = 100 * acc_te / float(n_iter_te)
             acc_max_te = max(acc_max_te, acc_te)
 
-            epoch_log = '%04ds | l_te %.02f | m_te %02.02f | mm_te %02.02f' % (duration, loss_te, acc_te, acc_max_te)
+            epoch_log = '%04ds | l_vl %.02f | m_vl %02.02f | mm_te %02.02f' % (duration, loss_te, acc_te, acc_max_te)
             sys.stdout.write('\r' + epoch_log + '\n')
             logger.print_to_file(epoch_log)
 
@@ -329,7 +329,7 @@ class ClassifierLearner():
 
                 tt2 = time.time()
                 duration = tt2 - tt1
-                sys.stdout.write('\r%04ds | epoch %02d/%02d | b_te %02d/%02d | l_te %.02f | m_te %02.02f    ' % (duration, epoch_num, n_epochs, batch_num, n_iter_te, loss_b, acc_b))
+                sys.stdout.write('\r%04ds | epoch %02d/%02d | b_te %02d/%02d | l_vl %.02f | m_vl %02.02f    ' % (duration, epoch_num, n_epochs, batch_num, n_iter_te, loss_b, acc_b))
 
             tt2 = time.time()
             duration = tt2 - tt1
@@ -342,6 +342,6 @@ class ClassifierLearner():
             acc_max_te = max(acc_max_te, acc_te)
             learning_rate = 0.0
 
-            epoch_log = '%04ds | epoch %02d/%02d | l_tr %.02f | l_te %.02f | m_tr %02.02f | m_te %02.02f | mm_tr %02.02f | mm_te %02.02f | lr %.04f' % (duration, epoch_num, n_epochs, loss_tr, loss_te, acc_tr, acc_te, acc_max_tr, acc_max_te, learning_rate)
+            epoch_log = '%04ds | epoch %02d/%02d | l_tr %.02f | l_vl %.02f | m_tr %02.02f | m_vl %02.02f | mm_tr %02.02f | mm_te %02.02f | lr %.04f' % (duration, epoch_num, n_epochs, loss_tr, loss_te, acc_tr, acc_te, acc_max_tr, acc_max_te, learning_rate)
             sys.stdout.write('\r' + epoch_log + '\n')
             logger.print_to_file(epoch_log)

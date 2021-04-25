@@ -46,9 +46,8 @@ from core.utils import Path as Pth
 class VideoFolder(data.Dataset):
 
     def __init__(self, root, json_file_input, json_file_labels, clip_size,
-                 nclips, step_size, is_val, transform_pre=None, transform_post=None,
-                 augmentation_mappings_json=None, augmentation_types_todo=None,
-                 get_item_id=False, is_test=False, framerate=None):
+                 n_clips, step_size, is_val, transform_pre=None, transform_post=None,
+                 augmentation_mappings_json=None, augmentation_types_todo=None, is_test=False, framerate=None):
 
         self.dataset_object = Mp4Dataset(json_file_input, json_file_labels, root, is_test=is_test)
         self.json_data = self.dataset_object.json_data
@@ -59,11 +58,10 @@ class VideoFolder(data.Dataset):
         self.transform_post = transform_post
         self.augmentor = Augmentor(augmentation_mappings_json, augmentation_types_todo)
 
+        self.n_clips = n_clips
         self.clip_size = clip_size
-        self.nclips = nclips
         self.step_size = step_size
         self.is_val = is_val
-        self.get_item_id = get_item_id
         self.framerate = framerate
 
     def __getitem__(self, index):
@@ -96,8 +94,8 @@ class VideoFolder(data.Dataset):
         num_frames = len(imgs)
         target_idx = self.classes_dict[label]
 
-        if self.nclips > -1:
-            num_frames_necessary = self.clip_size * self.nclips * self.step_size
+        if self.n_clips > -1:
+            num_frames_necessary = self.clip_size * self.n_clips * self.step_size
         else:
             num_frames_necessary = num_frames
         offset = 0
@@ -110,16 +108,13 @@ class VideoFolder(data.Dataset):
 
         imgs = imgs[offset: num_frames_necessary + offset: self.step_size]
 
-        if len(imgs) < (self.clip_size * self.nclips):
-            imgs.extend([imgs[-1]] * ((self.clip_size * self.nclips) - len(imgs)))
+        if len(imgs) < (self.clip_size * self.n_clips):
+            imgs.extend([imgs[-1]] * ((self.clip_size * self.n_clips) - len(imgs)))
 
-        # format data to torch
-        data = torch.stack(imgs)
-        data = data.permute(1, 0, 2, 3)
-        if self.get_item_id:
-            return (data, target_idx, item.id)
-        else:
-            return (data, target_idx)
+        # stack images
+        data = torch.stack(imgs) # (T, C, H, W)
+
+        return (data, target_idx)
 
     def __len__(self):
         n_items = len(self.json_data)

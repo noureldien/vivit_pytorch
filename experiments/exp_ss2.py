@@ -59,15 +59,17 @@ class Classification():
         gpu_ids = [0]
         n_epochs = 100
         clip_size = 16
-        batch_size_tr = 32
-        batch_size_te = 32
+        batch_size = 32
+        n_workers = 8
+        n_classes = 5
+        # n_classes = 174
         input_shape = (clip_size, 3, 224, 224)
 
         # building data
-        loader_tr, loader_te, n_tr, n_te = data_loaders.DataLoader3D(clip_size).initialize()
+        loader_tr, loader_te, n_tr, n_te = data_loaders.DataLoader3D(batch_size, clip_size, n_workers).initialize()
 
         # building the model
-        model = ViViT(clip_size, is_train=True)
+        model = ViViT(n_classes, clip_size, is_train=True)
         pytorch_utils.model_summary(model, input_size=input_shape, batch_size=-1, device='cpu')
         model = pytorch_utils.parallelize_model(model, gpu_ids)
         model = model.cuda()
@@ -77,8 +79,8 @@ class Classification():
         callbacks.append(pytorch_utils.ModelSaveCallback(model, model_root_path))
 
         # train
-        learner = pytorch_learners.ClassifierLearner( model, model._optimizer, model._loss_fn, model._metric_fn, callbacks)
-        learner.train(loader_tr, loader_te, n_tr, n_te, n_epochs, batch_size_tr, batch_size_te)
+        learner = pytorch_learners.ClassifierLearner(model, model._optimizer, model._loss_fn, model._metric_fn, callbacks)
+        learner.train(loader_tr, loader_te, n_tr, n_te, n_epochs, batch_size, batch_size)
 
         print('--- finish time')
         print(datetime.datetime.now())

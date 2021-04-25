@@ -24,23 +24,16 @@
 Documentation
 """
 
-import os
-import time
-import cv2
-import natsort
-import random
+
 import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from torchvision import datasets
 
-from core import utils, image_utils, config_utils, pytorch_utils, consts
-from datasets import data_sets, transforms_3d
-from datasets.data_transforms_3d import *
+from datasets import data_sets
+from datasets.transforms_3d import *
 from core.utils import Path as Pth
-from core.utils import TextLogger
 
 # region Initializations
 
@@ -53,12 +46,11 @@ random.seed(0)
 
 class DataLoader3D():
 
-    def __init__(self, clip_size):
+    def __init__(self, batch_size, clip_size, n_workers):
         super(DataLoader3D, self).__init__()
 
-        self.batch_size_tr = 32
-        self.batch_size_vl = 32
-        self.n_workers = 1
+        self.batch_size = batch_size
+        self.n_workers = n_workers
         self.img_dim_resize = 256
         self.img_dim_crop = 224
         self.upscale_factor_train = 1.4
@@ -69,9 +61,13 @@ class DataLoader3D():
         self.framerate = 12
 
         self.data_folder = Pth('videos/')
-        self.json_data_tr = Pth("annotation/something-something-v2-train.json")
-        self.json_data_vl = Pth("annotation/something-something-v2-validation.json")
-        self.json_data_test = Pth("annotation/something-something-v2-test.json")
+
+        # self.json_data_tr = Pth("annotation/something-something-v2-train.json")
+        # self.json_data_vl = Pth("annotation/something-something-v2-validation.json")
+
+        self.json_data_tr = Pth("annotation/something-something-v2-mini-train.json")
+        self.json_data_vl = Pth("annotation/something-something-v2-mini-validation.json")
+
         self.json_file_labels = Pth("annotation/something-something-v2-labels.json")
         self.augmentation_mappings = Pth("annotation/augmentation-mappings.json")
         self.augmentation_types_todo = ["left/right", "left/right agnostic", "jitter_fps"]
@@ -84,8 +80,8 @@ class DataLoader3D():
         dataset_tr, dataset_vl = self.__get_datasets()
 
         # data loaders
-        loader_tr = DataLoader(dataset_tr, batch_size=self.batch_size_tr, num_workers=self.n_workers, pin_memory=True, drop_last=True, shuffle=True)
-        loader_vl = DataLoader(dataset_vl, batch_size=self.batch_size_vl, num_workers=self.n_workers, pin_memory=True, drop_last=True, shuffle=False)
+        loader_tr = DataLoader(dataset_tr, batch_size=self.batch_size, num_workers=self.n_workers, pin_memory=True, drop_last=True, shuffle=True)
+        loader_vl = DataLoader(dataset_vl, batch_size=self.batch_size, num_workers=self.n_workers, pin_memory=True, drop_last=True, shuffle=False)
 
         n_tr = len(dataset_tr)
         n_vl = len(dataset_vl)
@@ -103,27 +99,25 @@ class DataLoader3D():
                                            json_file_input=self.json_data_tr,
                                            json_file_labels=self.json_file_labels,
                                            clip_size=self.clip_size,
-                                           nclips=self.n_clips,
+                                           n_clips=self.n_clips,
                                            step_size=self.step_size,
                                            framerate=self.framerate,
                                            is_val=False,
                                            transform_pre=self.transform_pre_tr,
                                            transform_post=self.transform_post,
                                            augmentation_mappings_json=self.augmentation_mappings,
-                                           augmentation_types_todo=self.augmentation_types_todo,
-                                           get_item_id=False)
+                                           augmentation_types_todo=self.augmentation_types_todo)
 
         dataset_vl = data_sets.VideoFolder(root=self.data_folder,
                                          json_file_input=self.json_data_vl,
                                          json_file_labels=self.json_file_labels,
                                          clip_size=self.clip_size,
-                                         nclips=self.n_clips,
+                                         n_clips=self.n_clips,
                                          step_size=self.step_size,
                                          framerate=self.framerate,
                                          is_val=True,
                                          transform_pre=self.transform_pre_vl,
-                                         transform_post=self.transform_post,
-                                         get_item_id=True)
+                                         transform_post=self.transform_post)
 
         return (dataset_tr, dataset_vl)
 
