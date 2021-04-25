@@ -10,29 +10,28 @@ from einops.layers.torch import Rearrange
 
 from core import consts, metrics, pytorch_utils
 
+
 class PreNorm(nn.Module):
     def __init__(self, dim, fn):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
         self.fn = fn
+
     def forward(self, x, **kwargs):
         return self.fn(self.norm(x), **kwargs)
 
+
 class FeedForward(nn.Module):
-    def __init__(self, in_dim, hidden_dim, out_dim, dropout = 0.):
+    def __init__(self, in_dim, hidden_dim, out_dim, dropout=0.):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(in_dim, hidden_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, out_dim),
-            nn.Dropout(dropout)
-        )
+        self.net = nn.Sequential(nn.Linear(in_dim, hidden_dim),nn.GELU(),nn.Dropout(dropout),nn.Linear(hidden_dim, out_dim),nn.Dropout(dropout))
+
     def forward(self, x):
         return self.net(x)
 
+
 class Attention(nn.Module):
-    def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.0, num_patches_space=None, num_patches_time=None, attn_type=None):
+    def __init__(self, dim, heads=8, dim_head=64, dropout=0.0, num_patches_space=None, num_patches_time=None, attn_type=None):
         super().__init__()
 
         assert attn_type in ['space', 'time'], 'Attention type should be one of the following: space, time.'
@@ -41,39 +40,27 @@ class Attention(nn.Module):
         self.num_patches_space = num_patches_space
         self.num_patches_time = num_patches_time
 
-        inner_dim = dim_head *  heads
-        project_out = not (heads == 1 and dim_head == dim)
-
+        inner_dim = dim_head * heads
         self.scale = dim_head ** -0.5
         self.heads = heads
 
-        self.attend = nn.Softmax(dim = -1)
-        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias = False)
+        self.attend = nn.Softmax(dim=-1)
+        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
 
-        self.to_out = nn.Sequential(nn.Linear(inner_dim, dim),nn.Dropout(dropout)) if project_out else nn.Identity()
-
-    def forward(self, input):
+    def forward(self, x):
 
         t = self.num_patches_time
         n = self.num_patches_space
-        k = t * n
-
-        # split x from class_token
-        x = input[:, 1:]  # (b, t*n, d)
-        class_token = input[:, 0:1]  # (b, 1, d)
 
         # reshape to reveal dimensions of space and time
         x = rearrange(x, 'b (t n) d -> b t n d', t=t, n=n)
 
         if self.attn_type == 'space':
-            out = self.forward_space(x)
+            out = self.forward_space(x) # (b, tn, d)
         elif self.attn_type == 'time':
-            out = self.forward_time(x)
+            out = self.forward_time(x) # (b, tn, d)
         else:
             raise Exception('Unknown attention type: %s' % (self.attn_type))
-
-        # concat again class token
-        out = torch.cat([class_token, out], dim=1) # (b, 1+tn, d)
 
         return out
 
@@ -86,10 +73,10 @@ class Attention(nn.Module):
         n = self.num_patches_space
 
         # hide time dimension into batch dimension
-        x = rearrange(x, 'b t n d -> (b t) n d') # (bt, n, d)
+        x = rearrange(x, 'b t n d -> (b t) n d')  # (bt, n, d)
 
         # apply self-attention
-        out = self.forward_attention(x) # (bt, n, d)
+        out = self.forward_attention(x)  # (bt, n, d)
 
         # recover time dimension and merge it into space
         out = rearrange(out, '(b t) n d -> b (t n) d', t=t, n=n)  # (b, tn, d)
@@ -105,11 +92,11 @@ class Attention(nn.Module):
         n = self.num_patches_space
 
         # hide time dimension into batch dimension
-        x = x.permute(0, 2, 1, 3) # (b, n, t, d)
+        x = x.permute(0, 2, 1, 3)  # (b, n, t, d)
         x = rearrange(x, 'b n t d -> (b n) t d')  # (bn, t, d)
 
         # apply self-attention
-        out = self.forward_attention(x) # (bn, t, d)
+        out = self.forward_attention(x)  # (bn, t, d)
 
         # recover time dimension and merge it into space
         out = rearrange(out, '(b n) t d -> b (t n) d', t=t, n=n)  # (b, tn, d)
@@ -127,9 +114,8 @@ class Attention(nn.Module):
         out = einsum('b h i j, b h j d -> b h i d', attn, v)
         out = rearrange(out, 'b h n d -> b n (h d)')
 
-        out = self.to_out(out)
-
         return out
+
 
 class Transformer(nn.Module):
     def __init__(self, dim, heads, dim_head, mlp_dim, dropout, num_patches_space, num_patches_time):
@@ -141,17 +127,34 @@ class Transformer(nn.Module):
 
         assert dim % 2 == 0
 
-        self.attention_space = PreNorm(dim, Attention(dim, heads = heads_half, dim_head = dim_head, dropout = dropout, num_patches_space=num_patches_space, num_patches_time=num_patches_time, attn_type='space'))
-        self.attention_time = PreNorm(dim, Attention(dim, heads = heads_half, dim_head = dim_head, dropout = dropout, num_patches_space=num_patches_space, num_patches_time=num_patches_time, attn_type='time'))
-        self.linear = PreNorm(dim * 2, FeedForward(dim * 2, mlp_dim, dim, dropout = dropout))
+        self.attention_space = PreNorm(dim, Attention(dim, heads=heads_half, dim_head=dim_head, dropout=dropout, num_patches_space=num_patches_space, num_patches_time=num_patches_time, attn_type='space'))
+        self.attention_time = PreNorm(dim, Attention(dim, heads=heads_half, dim_head=dim_head, dropout=dropout, num_patches_space=num_patches_space, num_patches_time=num_patches_time, attn_type='time'))
+
+        inner_dim = dim_head * heads_half * 2
+        self.linear = nn.Sequential(nn.Linear(inner_dim, dim), nn.Dropout(dropout))
+        self.mlp = PreNorm(dim, FeedForward(dim, mlp_dim, dim, dropout=dropout))
 
     def forward(self, x):
 
+        # self-attention
         xs = self.attention_space(x)
         xt = self.attention_time(x)
-        out = torch.cat([xs, xt], dim=2)
-        out = self.linear(out)
-        return out
+        out_att = torch.cat([xs, xt], dim=2)
+
+        # linear after self-attention
+        out_att = self.linear(out_att)
+
+        # residual connection for self-attention
+        out_att += x
+
+        # mlp after attention
+        out_mlp = self.mlp(out_att)
+
+        # residual for mlp
+        out_mlp += out_att
+
+        return out_mlp
+
 
 class ViViT(nn.Module):
     def __init__(self, num_classes, clip_size):
@@ -161,11 +164,11 @@ class ViViT(nn.Module):
         self.patch_size = 28
         self.num_classes = num_classes
         self.clip_size = clip_size
+        self.pool_type = 'cls'
         self.dim = 256
         self.depth = 6
         self.heads = 16
         self.mlp_dim = 256
-        self.pool_type = 'mean'
         self.channels = 3
         self.dim_head = 64
         self.dropout_ratio = 0.1
@@ -189,52 +192,45 @@ class ViViT(nn.Module):
         self._loss_fn = nn.CrossEntropyLoss()
         self._metric_fn = metrics.accuracy
         self._optimizer = optim.Adam(self.parameters(), 0.001)
+        self._optimizer = optim.SGD(self.parameters(), 0.1)
 
     def _init_layers(self):
 
-        self.to_patch_embedding = nn.Sequential(Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = self.patch_size, p2 = self.patch_size),nn.Linear(self.patch_dim, self.dim),)
-
-        self.pos_embedding = nn.Parameter(torch.randn(1, self.num_patches + 1, self.dim))
-        self.cls_token = nn.Parameter(torch.randn(1, 1, self.dim))
+        self.to_patch_embedding = nn.Sequential(Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1=self.patch_size, p2=self.patch_size), nn.Linear(self.patch_dim, self.dim), )
+        self.pos_embedding = nn.Parameter(torch.randn(1, self.num_patches, self.dim))
         self.dropout = nn.Dropout(self.emb_dropout_ratio)
 
         self.transformers = nn.ModuleList([])
         for _ in range(self.depth):
             self.transformers.append(Transformer(self.dim, self.heads, self.dim_head, self.mlp_dim, self.dropout_ratio, self.num_patches_space, self.num_patches_time))
 
-        self.to_latent = nn.Identity()
-        self.mlp_head = nn.Sequential(nn.LayerNorm(self.dim),nn.Linear(self.dim, self.num_classes), nn.Softmax())
+        self.mlp_head = nn.Sequential(nn.LayerNorm(self.dim), nn.Linear(self.dim, self.num_classes), nn.Softmax())
 
     def forward(self, x):
 
         b, c, t, h, w = x.shape
 
         # hide time inside batch
-        x = x.permute(0, 2, 1, 3, 4) # (b, t, c, h, w)
-        x = rearrange(x, 'b t c h w -> (b t) c h w') # (b*t, c, h, w)
+        x = x.permute(0, 2, 1, 3, 4)  # (b, t, c, h, w)
+        x = rearrange(x, 'b t c h w -> (b t) c h w')  # (b*t, c, h, w)
 
         # input embedding to get patch token
-        x = self.to_patch_embedding(x) # (b*t, n, d)
-
-        # class token
-        class_token = repeat(self.cls_token, '() n d -> b n d', b=b) # (b, 1, d)
+        x = self.to_patch_embedding(x)  # (b*t, n, d)
 
         # concat patch token and class token
-        x = rearrange(x, '(b t) n d -> b (t n) d', b=b, t=t) # (b tn, d)
-        x = torch.cat([class_token, x], dim=1) # (b, 1 + tn, d)
+        x = rearrange(x, '(b t) n d -> b (t n) d', b=b, t=t)  # (b tn, d)
 
         # add position embedding
-        x += self.pos_embedding # (b, 1+tn, d)
-        x = self.dropout(x) # (b, 1+tn, d)
+        x += self.pos_embedding  # (b, tn, d)
+        x = self.dropout(x)  # (b, tn, d)
 
         # layers of transformers
         for transformer in self.transformers:
-            x = transformer(x) # (b, 1+tn, d)
+            x = transformer(x)  # (b, tn, d)
 
         # space-time pooling
-        x = x.mean(dim = 1) if self.pool_type == 'mean' else x[:, 0]
+        x = x.mean(dim=1)
 
         # classifier
-        x = self.to_latent(x)
         x = self.mlp_head(x)
         return x
