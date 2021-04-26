@@ -191,7 +191,7 @@ class ViViT(nn.Module):
         # init loss, metric, and optimizer
         self._loss_fn = nn.CrossEntropyLoss()
         self._metric_fn = metrics.accuracy
-        self._optimizer = optim.Adam(self.parameters(), 0.001)
+        # self._optimizer = optim.Adam(self.parameters(), 0.001)
         self._optimizer = optim.SGD(self.parameters(), 0.1)
 
     def _init_layers(self):
@@ -218,7 +218,7 @@ class ViViT(nn.Module):
         x = self.to_patch_embedding(x)  # (b*t, n, d)
 
         # concat patch token and class token
-        x = rearrange(x, '(b t) n d -> b (t n) d', b=b, t=t)  # (b tn, d)
+        x = rearrange(x, '(b t) n d -> b (t n) d', b=b, t=t)  # (b, tn, d)
 
         # add position embedding
         x += self.pos_embedding  # (b, tn, d)
@@ -230,6 +230,9 @@ class ViViT(nn.Module):
 
         # space-time pooling
         x = x.mean(dim=1)
+
+        # classification
+        # x = x[:, 0]
 
         # classifier
         x = self.mlp_head(x)

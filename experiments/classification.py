@@ -32,9 +32,7 @@ import numpy as np
 from core import utils, plot_utils, consts, data_utils, pytorch_utils, pytorch_learners
 from core.utils import TextLogger, Path as Pth
 from datasets import data_loaders
-from modules.vivit_v1 import ViViT as ViViT_V1
-from modules.vivit_v2 import ViViT as ViViT_V2
-from modules.vivit import ViViT as ViViT_V3
+from modules.vivit import ViViT
 import modules
 
 class Classification():
@@ -64,9 +62,7 @@ class Classification():
         loader_tr, loader_te, n_tr, n_te = data_loaders.DataLoader3D(n_classes, batch_size, clip_size, n_workers).initialize()
 
         # building the model
-        # model = ViViT_V1(n_classes, clip_size, is_train=True)
-        # model = ViViT_V2(n_classes=n_classes, t=clip_size, model_type=3)
-        model = ViViT_V3(num_classes=n_classes, clip_size=clip_size)
+        model = ViViT(num_classes=n_classes, clip_size=clip_size)
         model = model.cuda()
         pytorch_utils.model_summary(model, input_size=input_shape, batch_size=-1, device='cuda')
 
