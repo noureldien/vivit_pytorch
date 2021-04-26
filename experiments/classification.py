@@ -34,7 +34,7 @@ from core.utils import TextLogger, Path as Pth
 from datasets import data_loaders
 from modules.vivit_v1 import ViViT as ViViT_V1
 from modules.vivit_v2 import ViViT as ViViT_V2
-from modules.vivit_v3 import ViViT as ViViT_V3
+from modules.vivit import ViViT as ViViT_V3
 import modules
 
 class Classification():

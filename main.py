@@ -33,7 +33,7 @@ import warnings
 import numpy as np
 
 from core.utils import Path as Pth
-from experiments import exp_ss2
+from experiments import classification
 
 # for preparing data annotation
 # from datasets import data_preparation
@@ -41,7 +41,7 @@ from experiments import exp_ss2
 # data_preparation.test_reduced_annotation()
 
 # for training
-classification = exp_ss2.Classification()
+classification = classification.Classification()
 classification.train()
 
 # for evaluation
