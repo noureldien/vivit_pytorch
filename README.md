@@ -29,4 +29,4 @@ conda install -c jjhelmus opencv
 ```
 
 #### Pacakge Requirements
-Please make sure you check list of required pacakges in this file [`rrequirements.txt`](requirements.txt)
+Please make sure you check list of required pacakges in this file [`requirements.txt`](requirements.txt)
