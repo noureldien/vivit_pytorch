@@ -1,5 +1,7 @@
 # Implementation of ViViT: A Video Vision Transformer
 
+#### Model 4
+This is the implementation of only model 4 in the paper: factorized dot-product attention.
 
 #### Python
 This project uses `python 3.7.3`. I use the `anaconda` distribution,
