@@ -2,6 +2,10 @@
 
 #### Model 4
 This is the implementation of only model 4 in the paper: factorized dot-product attention.
+There is a small error in the implementation, I'll try to fix it when I have time.
+The error is I use different query for space and time attentions.
+But in the paper, they use the same query for space and time attention.
+Please see 2nd paragraph in page 5.
 
 #### Python
 This project uses `python 3.7.3`. I use the `anaconda` distribution,
